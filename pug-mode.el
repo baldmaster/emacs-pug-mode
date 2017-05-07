@@ -11,11 +11,11 @@
 ;; Author: Henrik Lissner
 ;; Maintainer: Henrik Lissner <henrik@lissner.net>
 ;; Created: February 18, 2016
-;; Modified: May 30, 2016
-;; Version: 1.0.3
-;; Homepage: https://github.com/hlissner/pug-mode
+;; Modified: September 15, 2016
+;; Version: 1.0.4
+;; Homepage: https://github.com/hlissner/emacs-pug-mode
 ;; Keywords: markup, language, jade, pug
-;; Package-Requires: ((cl-lib "0.5"))
+;; Package-Requires: ((emacs "24.3"))
 ;;
 ;; This file is not part of GNU Emacs.
 ;;
@@ -68,10 +68,10 @@ line could be nested within this line.")
              "audio" "b" "base" "basefont" "bdo" "big" "blockquote" "body" "br"
              "button" "canvas" "caption" "center" "cite" "code" "col" "colgroup"
              "command" "datalist" "dd" "del" "details" "dialog" "dfn" "dir"
-             "div" "dl" "dt" "em" "embed" "fieldset" "figure" "font" "footer"
+             "div" "dl" "dt" "em" "embed" "fieldset" "figure" "figcaption" "font" "footer"
              "form" "frame" "frameset" "h1" "h2" "h3" "h4" "h5" "h6" "head"
              "header" "hgroup" "hr" "html" "i" "iframe" "img" "input" "ins"
-             "keygen" "kbd" "label" "legend" "li" "link" "map" "mark" "menu"
+             "keygen" "kbd" "label" "legend" "li" "link" "map" "main" "mark" "menu"
              "meta" "meter" "nav" "noframes" "noscript" "object" "ol" "optgroup"
              "option" "output" "p" "param" "pre" "progress" "q" "rp" "rt" "ruby"
              "s" "samp" "script" "section" "select" "small" "source" "span"
@@ -83,7 +83,7 @@ line could be nested within this line.")
 (defconst pug-selfclosing-tags-re
   (concat "^ *"
           (regexp-opt
-           '("meta" "title" "img" "area" "base" "br" "col" "command" "embed"
+           '("meta" "img" "area" "base" "br" "col" "command" "embed"
              "hr" "input" "link" "param" "source" "track" "wbr") t)))
 
 (defconst pug-keywords-re
@@ -92,8 +92,8 @@ line could be nested within this line.")
 (defconst pug-control-re
   (concat "^ *\\(- \\)?\\("
           (regexp-opt
-           '("if" "unless" "while" "until" "else" "for" "begin" "elsif" "when"
-             "default" "case" "var'"
+           '("if" "unless" "while" "until" "else" "for" "each" "in" "begin" 
+             "elsif" "when" "default" "case" "var'"
 
              "extends" "block" "mixin"
              ) 'words)
@@ -150,36 +150,45 @@ line could be nested within this line.")
     ;; block keywords
     (,pug-control-re
      (2 font-lock-keyword-face append))
-
+    ;; "in" keyword in "each" statement
+    ("each\\s-+\\w*\\s-+\\(in\\)" (1 font-lock-keyword-face))
+    
     ;; Single quote string
     ("[^a-z]\\('[^'\n]*'\\)"
      1 font-lock-string-face append)
     ;; Double quoted string
-    ;; ("\\(\"[^\"]*\"\\)"
-    ;;  1 font-lock-string-face append)
+    ("\\(\"[^\"]*\"\\)"
+     1 font-lock-string-face append)
 
     ;; plain text block
-    (,(pug-nested-re "[\\.#+a-z][^ \t]*\\(?:(.+)\\)?\\(\\.\\)")
-     (3 font-lock-string-face t))
+    ;;(,(pug-nested-re "[\\.#+a-z][^ \t]*\\(?:(.+)\\)?\\(\\.\\)")
+    ;; (3 font-lock-string-face t))
+
     ;; Plain text inline
-    ("^ *|.*" (0 font-lock-string-face t))
+    ("^\\s-*\\(|\\).*$"
+     (1 font-lock-function-name-face t))
 
-    ;; interpolation
-    ("[#!]\\({[^}]+}\\|\\[[^]]+\\]\\)"
-     (0 font-lock-preprocessor-face prepend))
+    ;; String interpolation
+    ("[#!]{\\([^}]+\\)}"
+     (1 font-lock-preprocessor-face))
 
+    ;; Tag interpolation
+    ("#\\[\\(\\sw+\\).*?\\]"
+     (1 font-lock-function-name-face))
+    
     ;; doctype
     ("^\\(doctype .*$\\)"
      1 font-lock-comment-face)
-    ;; include statements
-    ("\\<\\(include\\)\\(:[^ \t]+\\|\\s-+\\)\\([^\n]+\\)\n"
+    ;; include/extends statements
+    ("\\<\\(include\\|extends\\)\\(:[^ \t]+\\|\\s-+\\)\\([^\n]+\\)\n"
      (1 font-lock-keyword-face)
      (2 font-lock-preprocessor-face)
      (3 font-lock-string-face))
 
     ;; attributes
+    ;; FIXME Doesn't take inline js or multiline attributes into account
     ("[a-z0-9-_]("
-     ("\\(?:(\\|,\\s-*\\)\\([[:alnum:]_-]+\\)\\(\\s-*=\\s-*\\('[^']+'\\|\"[^\"]+\"\\|[^,]+\\)\\)?"
+     ("\\(?:(\\|,?\\s-*\\)\\([[:alnum:]_-]+\\)\\(\\s-*=\\s-*\\('[^']+'\\|\"[^\"]+\"\\)\\)?"
       (backward-char) (forward-char)
       (1 font-lock-constant-face)))
 
@@ -239,6 +248,7 @@ declaration"
   (let ((table (make-syntax-table)))
     (modify-syntax-entry ?\" "\"" table)
     (modify-syntax-entry ?\' "." table)
+    (modify-syntax-entry ?= " " table)
     (modify-syntax-entry ?# "." table)
     (modify-syntax-entry ?. "." table)
     (modify-syntax-entry ?: "." table)
@@ -523,6 +533,13 @@ line."
 (defun pug-indent-string ()
   "Return the indentation string for `pug-tab-width'."
   (mapconcat 'identity (make-list pug-tab-width " ") ""))
+
+;;;###autoload
+(defun pug-compile ()
+  (interactive)
+  (if (memq major-mode '(pug-mode jade-mode))
+      (compile (format "pug %s" buffer-file-name))
+    (user-error "Not in a pug-mode buffer")))
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.\\(jade\\|pug\\)\\'" . pug-mode))
