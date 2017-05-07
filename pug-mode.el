@@ -49,9 +49,7 @@ the backspaced line be re-indented along with the line itself."
   :group 'pug)
 
 ;; Indentation level
-(defcustom pug-tab-width (if (boundp 'pug-tab-width)
-                             'pug-tab-width
-                           2)
+(defcustom pug-tab-width 2
   "Number of spaces to indent nested statements."
   :group 'pug
   :safe 'integerp
