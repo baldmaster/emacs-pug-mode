@@ -106,6 +106,8 @@ line could be nested within this line.")
 (defconst pug-tag-declaration-char-re "[-a-zA-Z0-9_.#+]"
   "Regexp used to match a character in a tag declaration")
 
+(defconst pug-electric-chars-re "^\\s-*[^\\s-]+.*[|+]"
+  "Regexp matching electric chars inside strings.")
 
 ;; Helper for nested blocks (comment, embedded, text)
 (defun pug-nested-re (re)
