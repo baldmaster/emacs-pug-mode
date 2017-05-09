@@ -106,7 +106,7 @@ line could be nested within this line.")
 (defconst pug-tag-declaration-char-re "[-a-zA-Z0-9_.#+]"
   "Regexp used to match a character in a tag declaration")
 
-(defconst pug-electric-chars-re "^\\s-*[^\\s-]+.*[|+]"
+(defconst pug-electric-chars-re "^\\s-*[^\s-]+.*[|+]"
   "Regexp matching electric chars inside strings.")
 
 ;; Helper for nested blocks (comment, embedded, text)
@@ -225,6 +225,30 @@ line could be nested within this line.")
       (setq font-lock-end (max font-lock-end (point))))
     (or (/= old-beg font-lock-beg)
         (/= old-end font-lock-end))))
+
+;; Electric indent hook
+(defun pug-electric-indent-hook (char-code)
+  "Checks typed electric chars (defined in
+`electric-indent-chars') by `pug-electric-chars-re'.
+Returns `no-indent' if char typed somewhere ginside string"
+  (and (or (= char-code 43)
+           (= char-code 124))
+       (let* ((start-pos (line-beginning-position))
+              (substr (buffer-substring-no-properties
+                      start-pos
+                      (+ start-pos (current-column))
+                      )))
+         (save-excursion
+           (beginning-of-line)
+           (if (bobp) 'no-indent
+             (or (if (looking-at-p pug-electric-chars-re)
+                     'no-indent
+                   (and (string-match "^\\s-*[|+]$" substr)))
+                 t))))))
+
+;; Add electric indent hook
+(add-hook 'electric-indent-functions 'pug-electric-indent-hook)
+
 
 (defun pug-goto-end-of-tag ()
   "Skip ahead over whitespace, tag characters (defined in
